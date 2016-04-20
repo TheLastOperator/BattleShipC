@@ -4,6 +4,7 @@
 #include "grid.h"
 #include "ships.h"
 #include "display.h"
+#include "ai.h"
 
 void displayGameTitle()
 {
@@ -16,39 +17,31 @@ void displayGameTitle()
 	printf(" |____/ \\__,_|\\__|\\__|_|\\___|_____/|_| |_|_| .__/|___/\n");
 	printf("                                           | |        \n");
 	printf("                                           |_|        \n");
-	printf("\n");
+	printf("\n\n\n");
 }
 
 void placeShip(Grid mapPlayer, Ship ship, int cursorX, int cursorY, char dir) {
-	if(!isShipInGrid(mapPlayer, ship)) {
-		if(canShipFitInGrid(mapPlayer, ship, cursorX, cursorY, dir)) {
-			if (!isShipOverlapping(mapPlayer, ship, cursorX, cursorY, dir)) {
-				placeShipInGrid(mapPlayer, ship, cursorX, cursorY, dir);
+	if(canShipFitInGrid(mapPlayer, ship, cursorX, cursorY, dir)) {
+		if (isShipOverlapping(mapPlayer, ship, cursorX, cursorY, dir) != 1) {
+			if(isShipInGrid(mapPlayer, ship)) {
+				removeShipFromGrid(mapPlayer, ship, cursorX, cursorY, dir);
 			}
-			else {
-				printf("Ship is overlapping\n");
-				getchar();
-			}
+			placeShipInGrid(mapPlayer, ship, cursorX, cursorY, dir);
 		}
 		else {
-			printf("Ship out of bound\n");
+			displayInfoBox("Vous ne pouvez pas placer un bateau ici.");
 			getchar();
 		}
 	}
 	else {
-		printf("Ship allready placed\n");
+		displayInfoBox("Ship out of bound");
 		getchar();
 	}
 }
 
-void getPlayerCommand()
-{
-	printf("\n Quels sont vos instructions ?   \n > ");
-	getchar();
-}
-
 int main(int argc, char const *argv[])
 {
+	srand (time (NULL));
 
 	// Déclaration des grilles
 	Grid mapPlayer;
@@ -59,15 +52,10 @@ int main(int argc, char const *argv[])
 	// Remplissage des grilles
 	fillWithWater(mapPlayer);
 	fillWithWater(tabPlayer);
+	fillWithWater(mapComputer);
+	fillWithWater(tabComputer);
 
-	// Création du curseur de placement
-	int cursorX = 0;
-	int cursorY = 0;
-
-	char dir = 'h';
-	int mode = 0;
-	int shipSelector = -1;
-
+	// Création des types de bateaux
 	Ship ships[5];
 	ships[0].shipName = "Porte-avion";
 	ships[0].shipChar = 'p';
@@ -85,95 +73,143 @@ int main(int argc, char const *argv[])
 	ships[4].shipChar = 'd';
 	ships[4].shipLength = 2;
 
+	// Placement IA
+	placeShipsAI(mapComputer, ships);
+
+	// Création du curseur de placement
+	int cursorX = 0;
+	int cursorY = 0;
+
+	char dir = 'h';
+	int mode = 0;
+	int shipSelector = 0;
+
+	// Déclaration des structures de gestion du terminal
 	struct termios old_tio, new_tio;
 	unsigned char c;
 
-	/* get the terminal settings for stdin */
+	// Récupération de la configuration du terminal pour STDIN
 	tcgetattr(STDIN_FILENO,&old_tio);
 
-	/* we want to keep the old setting to restore them a the end */
+	// Sauvegarde des la configuration
 	new_tio=old_tio;
 
-	/* disable canonical mode (buffered i/o) and local echo */
+	// Désactivation de l'echo local
 	new_tio.c_lflag &=(~ICANON & ~ECHO);
 
-	/* set the new settings immediately */
+	// Application des changements
 	tcsetattr(STDIN_FILENO,TCSANOW,&new_tio);
+
+	// Hide cursor
+	printf("\e[?25l");
 
 	// Game loop
 	do {
-		//Clear du terminal
+		// Clear du terminal
 		printf("\033[2J\033[1;1H");
+
 		// Affichage du titre en ascii art
 		displayGameTitle();
+
 		// Affichage des grilles
-		displayDoubleGrid(mapPlayer, tabPlayer, ships, cursorX, cursorY, mode, shipSelector, dir);
+		displayDoubleGrid(mapPlayer, tabPlayer, tabComputer, ships, cursorX, cursorY, mode, shipSelector, dir);
+
+		if (mode == 0) {
+			displayInfoBox("Selectionez vos bateaux avec A et E et placez les avec Z,Q,S,D,R et ESPACE");
+		}
+		else if (mode == 1) {
+			displayInfoBox("Ciblez les bateaux enemis avec Z,Q,S,D et tirez avec ESPACE");
+		}
+
 		// Play !
 
 		c=getchar();
 
-		switch (c) {
-			case '8':
-				if(cursorY > 0)cursorY--;
-				break;
-			case '2':
-				if(canShipFitInGrid(mapPlayer, ships[shipSelector], cursorX, cursorY+1, dir))cursorY++;
-				break;
-			case '4':
-				if(cursorX > 0)cursorX--;
-				break;
-			case '6':
-				if(canShipFitInGrid(mapPlayer, ships[shipSelector], cursorX+1, cursorY, dir))cursorX++;
-				break;
-			case '9':
-				if(shipSelector > 0)shipSelector--;
-				while (!canShipFitInGrid(mapPlayer, ships[shipSelector], cursorX, cursorY, dir)) {
-					if(dir=='h') {
-						cursorX--;
+		// Phase placement des bateaux
+		if (mode == 0) {
+			switch (c) {
+				case 'z':
+					if(cursorY > 0)cursorY--;
+					break;
+				case 's':
+					if(canShipFitInGrid(mapPlayer, ships[shipSelector], cursorX, cursorY+1, dir))cursorY++;
+					break;
+				case 'q':
+					if(cursorX > 0)cursorX--;
+					break;
+				case 'd':
+					if(canShipFitInGrid(mapPlayer, ships[shipSelector], cursorX+1, cursorY, dir))cursorX++;
+					break;
+				case 'a':
+					if(shipSelector > 0)shipSelector--;
+					while (!canShipFitInGrid(mapPlayer, ships[shipSelector], cursorX, cursorY, dir)) {
+						if(dir=='h') {
+							cursorX--;
+						}
+						else {
+							cursorY--;
+						}
 					}
-					else {
-						cursorY--;
+					break;
+				case 'e':
+					if(shipSelector < 4)shipSelector++;
+					break;
+				case ' ':
+					placeShip(mapPlayer, ships[shipSelector], cursorX, cursorY, dir);
+					break;
+				case 'r':
+					dir = dir == 'h' ? 'v' : 'h';
+					while (!canShipFitInGrid(mapPlayer, ships[shipSelector], cursorX, cursorY, dir)) {
+						if(dir=='h') {
+							cursorX--;
+						}
+						else {
+							cursorY--;
+						}
 					}
-				}
-				break;
-			case '3':
-				if(shipSelector < 4)shipSelector++;
-				break;
-			case '7':
-			  placeShip(mapPlayer, ships[shipSelector], cursorX, cursorY, dir);
-				break;
-			case '1':
-				dir = dir == 'h' ? 'v' : 'h';
-				while (!canShipFitInGrid(mapPlayer, ships[shipSelector], cursorX, cursorY, dir)) {
-					if(dir=='h') {
-						cursorX--;
-					}
-					else {
-						cursorY--;
-					}
-				}
-				break;
-			case 's':
-				mode = mode==1?0:1;
-				break;
+					break;
+				case '\n':
+					mode = 1;
+					shipSelector = -1;
+					break;
+			}
 		}
-	} while(c!='q');
+		// Phase de jeu
+		else {
+			switch (c) {
+				case 'z':
+					if(cursorY > 0)cursorY--;
+					break;
+				case 's':
+					if(cursorY + 1 < _GRIDSIZE_)cursorY++;
+					break;
+				case 'q':
+					if(cursorX > 0)cursorX--;
+					break;
+				case 'd':
+					if(cursorX + 1 < _GRIDSIZE_)cursorX++;
+					break;
+				case ' ':
+					if(tabPlayer[cursorY][cursorX] == '~') {
+						// Player turn
+						shotTarget(tabPlayer, mapComputer, cursorX, cursorY);
+						// Computer turn
+						Pos pos = getNextTarget(tabComputer);
+						shotTarget(tabComputer, mapPlayer, pos.x, pos.y);
+					}
+					break;
+			}
+		}
+	} while(c!=27);
 
-	//Clear du terminal
+	// Clear du terminal
 	printf("\033[2J\033[1;1H");
-	printf("Thanks for playing !\n");
 
-	/* restore the former settings */
+	// Restoration de la configuration du terminal
 	tcsetattr(STDIN_FILENO,TCSANOW,&old_tio);
 
-	//int continuePlaying = 1;
-	//while(continuePlaying) {
-		/*
-		Ship ship = {'s', 3};
-		printf("%i\n", isShipInGrid(mapPlayer, ship));
-		//Player turn
-		getPlayerCommand();
-		//Computer turn*/
-	//}
+	// Show cursor
+	printf("\e[?25h");
+
 	return 0;
 }

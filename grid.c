@@ -12,3 +12,12 @@ void fillWithWater(char tab[_GRIDSIZE_][_GRIDSIZE_])
 		}
 	}
 }
+
+void shotTarget(Grid tab, Grid map, int x, int y) {
+	if(map[y][x] != '~') {
+		tab[y][x] = 'x';
+	}
+	else {
+		tab[y][x] = 'o';
+	}
+}
